@@ -5,8 +5,18 @@ import threading
 import subprocess
 import datetime
 import sys
+import logging
 
+log_file = 'app.log'
 
+# 如果日志文件存在，则删除它
+if os.path.exists(log_file):
+    os.remove(log_file)
+
+# 配置日志
+logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# 创建 Flask 应用
 app = Flask(__name__, static_folder='statics')
 
 # 提供 React 静态文件
@@ -41,7 +51,7 @@ def process_files():
     timestring=datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     # 调用另一个 Python 程序处理文件
     result_file_path = os.path.join(RESULT_FOLDER, 'idle_optical_module_'+timestring+'.xlsx')
-    # 这里假设处理程序是一个 Python 脚本，你可以替换为实际的调用
+
     # os.system(f'python process_files.py {file1_path} {file2_path} {result_file_path}')
     if getattr(sys, 'frozen', False):
         # 打包后的路径
@@ -50,7 +60,7 @@ def process_files():
         # 开发时的路径
         base_path = os.path.dirname(__file__)
 
-        
+    # 这里假设处理程序是一个 Python 脚本，你可以替换为实际的调用  
     exe_path = os.path.join(base_path, "find_idle_optical_module_cmd.exe")
     args = [file1_path, file2_path, result_file_path]
 
@@ -60,8 +70,13 @@ def process_files():
     print("Stdout:", result.stdout)
     print("Stderr:", result.stderr)
 
-
-    return jsonify({'filePath': result_file_path})
+    if result.returncode == 0:
+        print("File processed successfully.")
+        return jsonify({'filePath': result_file_path})
+    else:
+        print("Error processing file.")
+        return jsonify({'error': 'Error processing file.'}), 500
+    
 
 @app.route('/download', methods=['GET'])
 def download_file():
@@ -83,6 +98,17 @@ def download_file():
     print(f"Resolved file path: {file_folder}")
     return send_from_directory(file_folder, os.path.basename(file_path), as_attachment=True)
 
+
+@app.route('/get_logs', methods=['GET'])
+def get_logs():
+    try:
+        with open('app.log', 'r') as log_file:
+            logs = log_file.readlines()
+        return jsonify({'logs': logs})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 def start_server():
     app.run(port=5020)
 
@@ -91,5 +117,5 @@ if __name__ == '__main__':
     t.daemon = True
     t.start()
     webview.settings['ALLOW_DOWNLOADS'] = True
-    webview.create_window('Idle optical module finder for ZTE UME ', 'http://localhost:5020')
+    webview.create_window('Idle optical module finder for ZTE UME ', 'http://localhost:5020',width=800, height=600)
     webview.start()
